@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trello-like Drag and Drop</title>
+  <style>
+    .task-list {
+      width: 300px;
+      margin: 20px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      min-height: 300px;
+      float: left;
+    }
+
+    .task {
+      padding: 10px;
+      margin: 5px;
+      background-color: #f1f1f1;
+      border: 1px solid #ddd;
+      cursor: pointer;
+    }
+
+    .task-list h3 {
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h2>Trello-like Drag and Drop with SSE</h2>
+
+  <div id="todo" class="task-list" ondrop="drop(event)" ondragover="allowDrop(event)">
+    <h3>To Do</h3>
+    <!-- Tasks will be added here dynamically -->
+  </div>
+
+  <div id="in-progress" class="task-list" ondrop="drop(event)" ondragover="allowDrop(event)">
+    <h3>In Progress</h3>
+  </div>
+
+  <script>
+    const eventSource = new EventSource('http://localhost:3000/events');
+    
+    eventSource.onmessage = function(event) {
+      const tasks = JSON.parse(event.data);
+      updateTaskLists(tasks);
+    };
+
+    function updateTaskLists(tasks) {
+      document.getElementById('todo').innerHTML = '<h3>To Do</h3>';
+      document.getElementById('in-progress').innerHTML = '<h3>In Progress</h3>';
+
+      tasks.forEach(task => {
+        const taskElement = document.createElement('div');
+        taskElement.classList.add('task');
+        taskElement.id = 'task-' + task.id;
+        taskElement.draggable = true;
+        taskElement.ondragstart = drag;
+        taskElement.textContent = task.name;
+
+        if (task.status === 'To Do') {
+          document.getElementById('todo').appendChild(taskElement);
+        } else if (task.status === 'In Progress') {
+          document.getElementById('in-progress').appendChild(taskElement);
+        }
+      });
+    }
+
+    function allowDrop(event) {
+      event.preventDefault();
+    }
+
+    function drag(event) {
+      event.dataTransfer.setData("text", event.target.id);
+    }
+
+    function drop(event) {
+      event.preventDefault();
+      const data = event.dataTransfer.getData("text");
+      const draggedElement = document.getElementById(data);
+      const targetList = event.target;
+
+      targetList.appendChild(draggedElement);
+
+      const newStatus = targetList.id === 'todo' ? 'To Do' : 'In Progress';
+      updateTaskStatus(draggedElement.id, newStatus);
+    }
+
+    function updateTaskStatus(taskId, status) {
+      fetch('http://localhost:3000/update-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ taskId: taskId.split('-')[1], status })
+      })
+      .then(response => response.json())
+      .then(data => console.log(data))
+      .catch(error => console.error('Error:', error));
+    }
+  </script>
+</body>
+</html>
